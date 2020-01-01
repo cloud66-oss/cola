@@ -6,44 +6,69 @@ module Rediqulous
 	class Queue
 		attr_reader :queue_name
 		attr_reader :process_queue_name
+		attr_reader :deadletter_queue_name
 
 		def initialize(options = {})
 			@redis = options[:redis] || Redis.current
 			prefix = options[:prefix] || "rq_"
-			now = Time.new
-			@queue_name = prefix + now.to_i.to_s
-			@process_queue_name = prefix + "process_" + now.to_i.to_s
+			@deadletter = options[:deadletter] # default is false
+			if options[:queue_name] 
+				@queue_name = prefix + options[:queue_name]
+				@process_queue_name = prefix + "process_" + options[:queue_name]
+				@deadletter_queue_name = prefix + "deadletter_" + options[:queue_name]
+			else
+				now = Time.new.to_i
+				@queue_name = prefix + now.to_s
+				@process_queue_name = prefix + "process_" + now.to_s
+				@deadletter_queue_name = prefix + "deadletter_" + now.to_s
+			end
+
 			@timeout = options[:timeout] ||= 0
 			@retried = options[:retries] ||= 0
-			@queue_ttl = options[:queue_ttl] ||= 0
 		end
 
-		def length
+		def len
 			@redis.llen @queue_name
 		end
 
-		# not thread safe
-		def clear(clear_process_queue = false)
+		def flush_processing
+			@redis.del @process_queue_name
+		end
+
+		def flush
 			@redis.del @queue_name
-			@redis.del @process_queue_name if clear_process_queue
+		end
+
+		def flush_deadletter
+			@redis.del @deadletter_queue_name
+		end
+
+		# not thread safe
+		def destroy
+			flush_processing
+			flush
+			flush_deadletter
 		end
 
 		def empty?
-			length <= 0
+			len <= 0
 		end
 
 		def processing_count 
 			@redis.llen @process_queue_name
 		end
 
+		def deadletter_count 
+			@redis.llen @deadletter_queue_name
+		end
+
 		def push(obj)
 			wrapped = Rediqulous::Envelope.new(obj)
 			@redis.lpush(@queue_name, wrapped.to_json)
-			@redis.expire @queue_name, @queue_ttl if @queue_ttl != 0
 		end
 
-		def pop(non_block = false)
-			obj = pop_with_envelope(non_block)	
+		def pop(non_block = false, timeout: @timeout)
+			obj = pop_with_envelope(non_block, timeout: timeout)	
 			return nil if obj.nil?
 
 			return obj.message 
@@ -54,10 +79,9 @@ module Rediqulous
 			return true 
 		end
 
-		def process(non_block= false, timeout = nil)
-			@timeout = timeout unless timeout.nil?
+		def process(non_block = false, timeout: @timeout)
 			loop do
-				obj = pop(non_block)
+				obj = pop(non_block, timeout: timeout)
 				ret = yield obj if block_given?
 				commit if ret
 				break if obj.nil? || (non_block && empty?)
@@ -72,15 +96,12 @@ module Rediqulous
 			true
 		end
 
-		alias size  length
-		alias shift pop
-		alias <<    push
+		alias << push
 
 		private 
 
-		def pop_with_envelope(non_block = false)
-			obj = non_block ? @redis.rpoplpush(@queue_name, @process_queue_name) : @redis.brpoplpush(@queue_name, @process_queue_name, @timeout)
-			@redis.expire @process_queue_name, @queue_ttl if @queue_ttl != 0
+		def pop_with_envelope(non_block = false, timeout: @timeout)
+			obj = non_block ? @redis.rpoplpush(@queue_name, @process_queue_name) : @redis.brpoplpush(@queue_name, @process_queue_name, timeout)			
 			return Rediqulous::Envelope.from_payload(obj)
 		end
 

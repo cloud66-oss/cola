@@ -7,11 +7,11 @@ describe Rediqulous do
   before(:all) do
     @redis = Redis.new
     @queue = Rediqulous::Queue.new
-    @queue.clear true
+    @queue.destroy
   end
 
   after(:all) do
-    @queue.clear true
+    @queue.destroy
   end
 
   it 'should create a new redis-queue object' do
@@ -21,7 +21,7 @@ describe Rediqulous do
 
   it 'should add an element to the queue' do
     @queue << 'a'
-    @queue.size.should be == 1
+    @queue.len.should be == 1
   end
 
   it 'should return an element from the queue' do
@@ -36,7 +36,7 @@ describe Rediqulous do
   end
 
   it 'should implement fifo pattern' do
-    @queue.clear
+    @queue.destroy
 	payload = %w[a b c d e]
     payload.each { |e| @queue << e }
     test = []
@@ -48,14 +48,14 @@ describe Rediqulous do
 
   it 'should remove all of the elements from the main queue' do
     %w[a b c d e].each { |e| @queue << e }
-    @queue.size.should be > 0
+    @queue.len.should be > 0
     @queue.pop(true)
-    @queue.clear
-    @redis.llen(@queue.process_queue_name).should be > 0
+    @queue.destroy
+    @redis.llen(@queue.process_queue_name).should be == 0
   end
 
   it 'should reset queues content' do
-    @queue.clear(true)
+    @queue.destroy
     @redis.llen(@queue.process_queue_name).should be == 0
   end
 
@@ -65,12 +65,12 @@ describe Rediqulous do
   end
 
   it 'should work with the timeout parameters' do
-    @queue.clear(true)
+    @queue.destroy
     2.times { @queue << rand(100) }
     is_ok = true
     begin
       Timeout.timeout(3) do
-        @queue.process(false, 2) { |_m| true }
+        @queue.process(false, timeout: 2) { |_m| true }
       end
     rescue Timeout::Error => _e
       is_ok = false
@@ -82,7 +82,7 @@ describe Rediqulous do
   it 'should honor the timeout param in the initializer' do
     redis = Redis.new
     queue = Rediqulous::Queue.new(redis: redis, timeout: 2)
-    queue.clear true
+    queue.destroy
 
     is_ok = true
     begin
@@ -92,7 +92,7 @@ describe Rediqulous do
     rescue Timeout::Error => _e
       is_ok = false
     end
-    queue.clear
+    queue.destroy
     is_ok.should be_truthy
   end
 end

@@ -3,13 +3,15 @@ module Rediqulous
 		attr_reader :message 
 		attr_reader :timestamp 
 		attr_reader :retries
-		attr_reader :last_result 
+		attr_reader :last_reason 
+		attr_reader :version
 
-		def initialize(message, timestamp: Time.now, retries: 0, last_result: nil)
+		def initialize(message, version: 1, timestamp: Time.now, retries: 0, last_reason: nil)
 			@message = message
 			@timestamp = timestamp
 			@retries = retries
-			@last_result = last_result
+			@last_reason = last_reason
+			@version = version
 		end
 
 		def self.from_payload(payload)
@@ -19,17 +21,24 @@ module Rediqulous
 
 			return Rediqulous::Envelope.new(
 				obj['message'], 
+				version: obj['version'],
 				timestamp: obj['timestamp'],
 				retries: obj['retries'],
-				last_result: obj['last_result'])
+				last_reason: obj['last_reason'])
+		end
+
+		def inc_retries(reason = nil)
+			@retries = @retries + 1
+			@last_reason = reason if reason
 		end
 
 		def to_json 
 			{
+				version: @version,
 				message: @message,
 				timestamp: @timestamp.iso8601,
 				retries: @retries,
-				last_result: @last_result
+				last_reason: @last_reason
 			}.to_json 
 		end
 
