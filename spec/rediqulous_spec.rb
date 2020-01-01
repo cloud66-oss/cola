@@ -95,4 +95,15 @@ describe Rediqulous do
     queue.destroy
     is_ok.should be_truthy
   end
+
+  it 'should retry on valid errors' do 
+	queue = Rediqulous::Queue.new(retries: 3)
+	queue << 'a'
+
+	expect do 
+		queue.process(true) do |item|
+			raise 'some error'
+		end
+	end.to raise_error(::Rediqulous::RetryError, /Retried 3 times/)
+  end
 end

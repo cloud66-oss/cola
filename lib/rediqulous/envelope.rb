@@ -22,12 +22,12 @@ module Rediqulous
 			return Rediqulous::Envelope.new(
 				obj['message'], 
 				version: obj['version'],
-				timestamp: obj['timestamp'],
+				timestamp: Time.parse(obj['timestamp']),
 				retries: obj['retries'],
 				last_reason: obj['last_reason'])
 		end
 
-		def inc_retries(reason = nil)
+		def inc_retries(reason: nil)
 			@retries = @retries + 1
 			@last_reason = reason if reason
 		end

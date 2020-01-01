@@ -24,7 +24,7 @@ module Rediqulous
 			end
 
 			@timeout = options[:timeout] ||= 0
-			@retried = options[:retries] ||= 0
+			@retries = options[:retries] ||= 0
 		end
 
 		def len
@@ -63,7 +63,12 @@ module Rediqulous
 		end
 
 		def push(obj)
-			wrapped = Rediqulous::Envelope.new(obj)
+			if obj.is_a? Rediqulous::Envelope
+				wrapped = obj
+			else 
+				wrapped = Rediqulous::Envelope.new(obj)
+			end
+		
 			@redis.lpush(@queue_name, wrapped.to_json)
 		end
 
@@ -81,10 +86,22 @@ module Rediqulous
 
 		def process(non_block = false, timeout: @timeout)
 			loop do
-				obj = pop(non_block, timeout: timeout)
-				ret = yield obj if block_given?
+				obj = pop_with_envelope(non_block, timeout: timeout)
+				ret = yield obj.message if !obj.nil? && block_given?
 				commit if ret
 				break if obj.nil? || (non_block && empty?)
+			rescue => exc 
+				# requeue if we should retry and it's not done 
+				if @retries != 0
+					if obj.retries < @retries
+						obj.inc_retries(reason: exc.message)
+						push(obj)
+					else 
+						raise Rediqulous::RetryError.new(obj, exc)
+					end
+				else 
+					raise 
+				end
 			end
 		end
 
