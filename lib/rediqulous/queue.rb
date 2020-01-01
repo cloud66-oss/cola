@@ -90,6 +90,8 @@ module Rediqulous
 				ret = yield obj.message if !obj.nil? && block_given?
 				commit if ret
 				break if obj.nil? || (non_block && empty?)
+			# TODO: shouldn't catch JSON errors
+			# TODO: deadletter support
 			rescue => exc 
 				# requeue if we should retry and it's not done 
 				if @retries != 0
@@ -119,6 +121,7 @@ module Rediqulous
 
 		def pop_with_envelope(non_block = false, timeout: @timeout)
 			obj = non_block ? @redis.rpoplpush(@queue_name, @process_queue_name) : @redis.brpoplpush(@queue_name, @process_queue_name, timeout)			
+			# TODO: Support obj expiry
 			return Rediqulous::Envelope.from_payload(obj)
 		end
 
