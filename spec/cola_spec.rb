@@ -3,10 +3,10 @@
 require 'spec_helper'
 require 'timeout'
 
-describe Rediqulous do
+describe Cola do
   before(:all) do
     @redis = Redis.new
-    @queue = Rediqulous::Queue.new
+    @queue = Cola::Queue.new
     @queue.destroy
   end
 
@@ -15,8 +15,8 @@ describe Rediqulous do
   end
 
   it 'should create a new redis-queue object' do
-    queue = Rediqulous::Queue.new
-    queue.class.should == Rediqulous::Queue
+    queue = Cola::Queue.new
+    queue.class.should == Cola::Queue
   end
 
   it 'should add an element to the queue' do
@@ -59,6 +59,20 @@ describe Rediqulous do
     @redis.llen(@queue.process_queue_name).should be == 0
   end
 
+  it 'should keep uuid' do 
+	@queue.destroy
+	@queue << 'a'
+
+	msg = @queue.pop_with_envelope(true)
+	expect(msg.uuid).not_to be_nil
+	uuid = msg.uuid
+
+	@queue.refill
+
+	msg = @queue.pop_with_envelope(true)
+	expect(uuid).to eq(msg.uuid)
+  end
+
   it 'should prcess a message' do
     @queue << 'a'
     @queue.process(true) { |m| m.should be == 'a'; true }
@@ -79,9 +93,33 @@ describe Rediqulous do
     is_ok.should be_truthy
   end
 
+  it 'should handle JSON exceptions' do 
+	@queue.destroy
+	@redis.lpush(@queue.queue_name, 's')
+
+	expect { @queue.pop(true) }.to raise_error(JSON::ParserError)
+
+	@queue.destroy
+	@redis.lpush(@queue.queue_name, '{ "foo": 1 }')
+	expect { @queue.pop(true) }.to raise_error(Cola::MessageError)
+  end
+
+  it 'should push to deadletter queue' do 
+	queue = Cola::Queue.new(retries: 3)
+	queue << 'a'
+
+	expect do 
+		queue.process(true) do |item|
+			raise 'some error'
+		end
+	end.to raise_error(::Cola::RetryError, /Retried 3 times/)
+
+	expect(queue.deadletter_count).to eq 1
+  end
+
   it 'should honor the timeout param in the initializer' do
     redis = Redis.new
-    queue = Rediqulous::Queue.new(redis: redis, timeout: 2)
+    queue = Cola::Queue.new(redis: redis, timeout: 2)
     queue.destroy
 
     is_ok = true
@@ -97,13 +135,13 @@ describe Rediqulous do
   end
 
   it 'should retry on valid errors' do 
-	queue = Rediqulous::Queue.new(retries: 3)
+	queue = Cola::Queue.new(retries: 3)
 	queue << 'a'
 
 	expect do 
 		queue.process(true) do |item|
 			raise 'some error'
 		end
-	end.to raise_error(::Rediqulous::RetryError, /Retried 3 times/)
+	end.to raise_error(::Cola::RetryError, /Retried 3 times/)
   end
 end

@@ -3,14 +3,14 @@
 
 lib = File.expand_path("lib", __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require "rediqulous/version"
+require "cola/version"
 
 Gem::Specification.new do |spec|
-  spec.name        = 'rediqulous'
-  spec.version     = Rediqulous::VERSION
+  spec.name        = 'rb-cola'
+  spec.version     = Cola::VERSION
   spec.authors     = ['Khash Sajadi']
   spec.email       = ['khash@cloud66.com']
-  spec.homepage    = 'https://github.com/khash/rediqulous'
+  spec.homepage    = 'https://github.com/cloud66-oss/rb-cola'
   spec.summary     = 'A distributed queue based on Redis'
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do

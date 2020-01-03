@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'rediqulous'
+require 'cola'
 
 redis = Redis.new
 
-queue = Rediqulous.new(redis: redis)
+queue = Cola.new(redis: redis)
 queue.clear true
 
 100.times { queue << rand(100) }

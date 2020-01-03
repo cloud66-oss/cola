@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    rediqulous (0.0.1)
+    rb-cola (0.0.1)
       redis (>= 3.3.5, < 5)
 
 GEM
@@ -30,7 +30,7 @@ PLATFORMS
 DEPENDENCIES
   bundler
   byebug (~> 11.0)
-  rediqulous!
+  rb-cola!
   rspec (~> 3.8)
 
 BUNDLED WITH

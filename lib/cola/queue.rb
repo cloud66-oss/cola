@@ -2,7 +2,7 @@
 
 require 'byebug'
 
-module Rediqulous 
+module Cola 
 	class Queue
 		attr_reader :queue_name
 		attr_reader :process_queue_name
@@ -63,10 +63,10 @@ module Rediqulous
 		end
 
 		def push(obj)
-			if obj.is_a? Rediqulous::Envelope
+			if obj.is_a? Cola::Envelope
 				wrapped = obj
 			else 
-				wrapped = Rediqulous::Envelope.new(obj)
+				wrapped = Cola::Envelope.new(obj)
 			end
 		
 			@redis.lpush(@queue_name, wrapped.to_json)
@@ -90,18 +90,19 @@ module Rediqulous
 				ret = yield obj.message if !obj.nil? && block_given?
 				commit if ret
 				break if obj.nil? || (non_block && empty?)
-			# TODO: shouldn't catch JSON errors
-			# TODO: deadletter support
 			rescue => exc 
+				raise if obj.nil? 
 				# requeue if we should retry and it's not done 
 				if @retries != 0
 					if obj.retries < @retries
 						obj.inc_retries(reason: exc.message)
 						push(obj)
 					else 
-						raise Rediqulous::RetryError.new(obj, exc)
+						mark_as_deadletter(obj)
+						raise Cola::RetryError.new(obj, exc)
 					end
 				else 
+					mark_as_deadletter(obj)
 					raise 
 				end
 			end
@@ -117,12 +118,16 @@ module Rediqulous
 
 		alias << push
 
+		def pop_with_envelope(non_block = false, timeout: @timeout)
+			obj = non_block ? @redis.rpoplpush(@queue_name, @process_queue_name) : @redis.brpoplpush(@queue_name, @process_queue_name, timeout)
+			# TODO: Support obj expiry
+			return Cola::Envelope.from_payload(obj)
+		end
+
 		private 
 
-		def pop_with_envelope(non_block = false, timeout: @timeout)
-			obj = non_block ? @redis.rpoplpush(@queue_name, @process_queue_name) : @redis.brpoplpush(@queue_name, @process_queue_name, timeout)			
-			# TODO: Support obj expiry
-			return Rediqulous::Envelope.from_payload(obj)
+		def mark_as_deadletter(obj) 
+			@redis.lpush(@deadletter_queue_name, obj.to_json)
 		end
 
 	end
