@@ -59,6 +59,15 @@ describe Cola do
     @redis.llen(@queue.process_queue_name).should be == 0
   end
 
+  it 'should support JSON for payload' do 
+	@queue.destroy
+	@queue << { foo: 1 }
+
+	msg = @queue.pop(false)
+	expect(msg).to be_a_kind_of Hash 
+	expect(msg["foo"]).to eq 1
+  end 
+
   it 'should keep uuid' do 
 	@queue.destroy
 	@queue << 'a'
