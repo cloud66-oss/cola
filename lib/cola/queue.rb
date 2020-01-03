@@ -1,7 +1,4 @@
 # frozen_string_literal: true
-
-require 'byebug'
-
 module Cola 
 	class Queue
 		attr_reader :queue_name
@@ -62,11 +59,12 @@ module Cola
 			@redis.llen @deadletter_queue_name
 		end
 
-		def push(obj)
+		def push(obj, ttl: 0)
 			if obj.is_a? Cola::Envelope
 				wrapped = obj
-			else 
+			else 				
 				wrapped = Cola::Envelope.new(obj)
+				wrapped.ttl = ttl
 			end
 		
 			@redis.lpush(@queue_name, wrapped.to_json)
@@ -120,8 +118,16 @@ module Cola
 
 		def pop_with_envelope(non_block = false, timeout: @timeout)
 			obj = non_block ? @redis.rpoplpush(@queue_name, @process_queue_name) : @redis.brpoplpush(@queue_name, @process_queue_name, timeout)
-			# TODO: Support obj expiry
-			return Cola::Envelope.from_payload(obj)
+
+			env = Cola::Envelope.from_payload(obj)
+			return env if env.nil? 
+
+			if env.expired? 
+				commit
+				return nil
+			else
+				return env
+			end
 		end
 
 		private 

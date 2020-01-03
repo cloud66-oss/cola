@@ -78,6 +78,17 @@ describe Cola do
     @queue.process(true) { |m| m.should be == 'a'; true }
   end
 
+  it 'should honour ttl' do 
+	@queue.destroy
+	@queue.push('a', ttl: 1)
+
+	sleep(2)
+	msg = @queue.pop(false)
+
+	expect(msg).to be_nil
+	expect(@queue.processing_count).to eq 0
+  end
+
   it 'should work with the timeout parameters' do
     @queue.destroy
     2.times { @queue << rand(100) }

@@ -6,14 +6,22 @@ module Cola
 		attr_reader :last_reason 
 		attr_reader :version
 		attr_reader :uuid
+		attr_accessor :ttl # in seconds
 
-		def initialize(message, version: 1, timestamp: Time.now, retries: 0, last_reason: nil, uuid: SecureRandom.uuid)
+		def initialize(message, 
+						version: 1, 
+						timestamp: Time.now, 
+						retries: 0, 
+						last_reason: nil, 
+						uuid: SecureRandom.uuid,
+						ttl: 0)
 			@message = message
 			@timestamp = timestamp
 			@retries = retries
 			@last_reason = last_reason
 			@version = version
 			@uuid = uuid
+			@ttl = ttl 
 		end
 
 		def self.from_payload(payload)
@@ -27,6 +35,7 @@ module Cola
 				timestamp: Time.parse(obj['timestamp']),
 				retries: obj['retries'],
 				uuid: obj['uuid'],
+				ttl: obj['ttl'],
 				last_reason: obj['last_reason'])
 		rescue TypeError => exc 
 			raise ::Cola::MessageError, 'malformed message'
@@ -37,6 +46,12 @@ module Cola
 			@last_reason = reason if reason
 		end
 
+		def expired?
+			return false if self.ttl == 0
+
+			return Time.now > self.timestamp + self.ttl 
+		end
+
 		def to_json 
 			{
 				version: @version,
@@ -44,6 +59,7 @@ module Cola
 				timestamp: @timestamp.iso8601,
 				retries: @retries,
 				uuid: @uuid,
+				ttl: @ttl, 
 				last_reason: @last_reason
 			}.to_json 
 		end
