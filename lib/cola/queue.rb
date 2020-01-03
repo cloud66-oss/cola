@@ -24,6 +24,8 @@ module Cola
 			@retries = options[:retries] ||= 0
 		end
 
+		# returns the count of the items on the queue. 
+		# note that this returns the total number which might include expired messages
 		def len
 			@redis.llen @queue_name
 		end
@@ -68,6 +70,7 @@ module Cola
 			end
 		
 			@redis.lpush(@queue_name, wrapped.to_json)
+			return wrapped
 		end
 
 		def pop(non_block = false, timeout: @timeout)
